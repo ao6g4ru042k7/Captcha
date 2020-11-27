@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Document</title>
+        <style>
+            .test {
+                width: 280px;
+                position: relative;
+            }
+            .test canvas {
+                border-radius: 3px;
+                border: 1px solid #ddd;
+            }
+            .test > canvas:nth-of-type(2) {
+                position: absolute;
+                top: 0;
+                left: 0;
+            }
+            .test > div {
+                width: 100%;
+                height: 40px;
+                position: relative;
+                background-color: #eee;
+                border: 1px solid #ddd;
+                border-radius: 3px;
+                font-size: 18px;
+                text-align: center;
+                line-height: 40px;
+                user-select: none;
+            }
+            .test > div > span {
+                width: 40px;
+                height: 100%;
+                position: absolute;
+                top: 0;
+                left: 0;
+                display: block;
+                border-radius: 3px;
+                box-shadow: 0px 0px 3px rgba(0, 0, 0, 0.4);
+                background-color: white;
+                color: #777;
+                font-size: 30px;
+                font-weight: 600;
+                cursor: pointer;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="captcha"></div>
+        <script>
+            (function (root, factory) {
+                if (typeof exports === "object" && typeof module === "object")
+                    module.exports = factory();
+                else if (typeof define === "function" && define.amd)
+                    define([], factory());
+                else if (typeof exports === "object")
+                    exports["$Captcha"] = factory();
+                else root["$Captcha"] = factory();
+            })(this, function () {
+                //拼圖共通且不會更改的屬性，只能被繼承
+                function PuzzleAbs() {
+                    this.radius = 10;
+                    this.triLen =
+                        this.radius - this.radius * Math.cos(Math.PI / 6);
+                    this.drawAbs = function () {
+                        const x = this.x,
+                            y = this.y,
+                            ctx = this.ctx,
+                            radius = this.radius,
+                            triLen = this.triLen;
+                        ctx.save();
+                        ctx.translate(radius - triLen, 45 - triLen);
+                        ctx.beginPath();
+                        ctx.arc(
+                            x,
+                            y,
+                            radius,
+                            (Math.PI * 5) / 6,
+                            (Math.PI * 7) / 6,
+                            true
+                        );
+                        ctx.lineTo(x - radius + triLen, y - 25);
+                        ctx.lineTo(x + radius, y - 25);
+                        ctx.arc(
+                            x + 15,
+                            y - 35 + triLen,
+                            radius,
+                            (Math.PI * 2) / 3,
+                            (Math.PI * 1) / 3,
+                            false
+                        );
+                        ctx.lineTo(x + 40, y - 25);
+                        ctx.lineTo(x + 40, y - 5 - triLen);
+                        ctx.arc(
+                            x + 50 - triLen,
+                            y,
+                            radius,
+                            (Math.PI * 7) / 6,
+                            (Math.PI * 5) / 6,
+                            false
+                        );
+                        ctx.lineTo(x + 40, y + 25);
+                        ctx.lineTo(x - radius + triLen, y + 25);
+                        ctx.closePath();
+                        ctx.restore();
+                    };
+                    Object.defineProperty(this, "x", {
+                        set: function (value) {
+                            clearTimeout(this.timer);
+                            this.timer = setTimeout(() => {
+                                this.draw();
+                            }, 0);
+                            this.__x__ = value;
+                        },
+                        get: function () {
+                            return this.__x__;
+                        },
+                    });
+                    Object.defineProperty(this, "y", {
+                        set: function (value) {
+                            clearTimeout(this.timer);
+                            this.timer = setTimeout(() => {
+                                this.draw();
+                            }, 0);
+                            this.__y__ = value;
+                        },
+                        get: function () {
+                            return this.__y__;
+                        },
+                    });
+                }
+                //拼圖共通但會更改的屬性
+                function PuzzleCom(ctx) {
+                    this.timer = null;
+                    this.ctx = ctx;
+                    this.__x__ = 0;
+                    this.__y__ = 0;
+                }
+
+                PuzzleCom.prototype = new PuzzleAbs();
+
+                function createDOMs() {
+                    const wrapDiv = document.createElement("div");
+                    const slipeDiv = document.createElement("div");
+                    const slipeSpan = document.createElement("span");
+                    const canvasBg = document.createElement("canvas");
+                    const canvasReal = document.createElement("canvas");
+                    slipeDiv.textContent = "向右拖動滑塊填充拼圖";
+                    slipeSpan.textContent = ">";
+                    wrapDiv.appendChild(canvasBg);
+                    wrapDiv.appendChild(canvasReal);
+                    wrapDiv.appendChild(slipeDiv);
+                    slipeDiv.appendChild(slipeSpan);
+                    wrapDiv.className = "test";
+                    canvasBg.width = 280;
+                    canvasBg.height = 200;
+                    canvasReal.width = 280;
+                    canvasReal.height = 200;
+                    return [wrapDiv, canvasBg, canvasReal, slipeSpan];
+                }
+
+                function createPuzzleBg(ctx) {
+                    const puzzleBg = new PuzzleCom(ctx);
+                    puzzleBg.draw = function () {
+                        const ctx = this.ctx;
+                        ctx.save();
+                        this.drawAbs();
+                        ctx.clip();
+                        ctx.fillStyle = "rgba(0,0,0,.3)";
+                        ctx.fill();
+                        ctx.globalCompositeOperation = "destination-atop";
+                        ctx.shadowColor = "rgba(0,0,0,.7)";
+                        ctx.fillStyle = "rgba(0,0,0,1)";
+                        ctx.shadowBlur = 7;
+                        ctx.fill();
+                        ctx.globalCompositeOperation = "source-over";
+                        ctx.restore();
+                    };
+                    return puzzleBg;
+                }
+
+                function createPuzzleReal(ctx) {
+                    const puzzleReal = new PuzzleCom(ctx);
+                    puzzleReal.oriX = 0;
+                    puzzleReal.oriY = 0;
+                    puzzleReal.draw = function () {
+                        const ctx = this.ctx;
+                        ctx.clearRect(0, 0, 280, 200);
+                        ctx.save();
+                        this.drawAbs();
+                        ctx.shadowColor = "rgba(0,0,0,.8)";
+                        ctx.shadowBlur = 7;
+                        ctx.fillStyle = "rgba(0,0,0,1)";
+                        ctx.fill();
+                        ctx.clip();
+                        ctx.translate(-this.oriX + this.x, -this.oriY + this.y);
+                        ctx.drawImage(this.img, 0, 0, 280, 200);
+                        ctx.restore();
+                    };
+                    puzzleReal.setOriPos = function (x, y) {
+                        this.oriX = x;
+                        this.oriY = y;
+                    };
+                    puzzleReal.setImg = function (img) {
+                        this.img = img;
+                    };
+                    return puzzleReal;
+                }
+
+                function loadedImg(url, callback) {
+                    const img = new Image(); // Create new img element
+                    img.addEventListener("load", () => callback(img), false);
+                    img.src = url;
+                }
+
+                function bindSlipeEvent(self, slipe, canvasReal, resX) {
+                    let startX, startMX, x;
+                    slipe.addEventListener("mousedown", function (e) {
+                        startMX = e.clientX;
+                        startX = parseInt(
+                            window
+                                .getComputedStyle(slipe)
+                                .getPropertyValue("left")
+                        );
+                        window.addEventListener("mousemove", slipeMoveHandler);
+                    });
+                    window.addEventListener("mouseup", function (e) {
+                        if (Math.abs(x - resX) < 5) {
+                            self.state = true;
+                        } else {
+                            self.state = false;
+                            canvasReal.x = 0;
+                            slipe.style.left = "0px";
+                        }
+                        window.removeEventListener(
+                            "mousemove",
+                            slipeMoveHandler
+                        );
+                    });
+                    function slipeMoveHandler(e) {
+                        if (!self.state) {
+                            x = e.clientX - startMX + startX;
+                            if (x > 240) {
+                                x = 240;
+                            } else if (x < 0) {
+                                x = 0;
+                            }
+                            slipe.style.left = x + "px";
+                            canvasReal.x = x;
+                        }
+                    }
+                }
+                
+                const initCaptcha = function (dom) {
+                    this.state = false;
+                    const [
+                        wrapDiv,
+                        canvasBg,
+                        canvasReal,
+                        slipeSpan,
+                    ] = createDOMs();
+                    dom.appendChild(wrapDiv);
+                    const ctxBg = canvasBg.getContext("2d");
+                    const ctxReal = canvasReal.getContext("2d");
+                    const puzzleBg = createPuzzleBg(ctxBg);
+                    const puzzleReal = createPuzzleReal(ctxReal);
+                    const x = Math.round(Math.random() * 130 + 70);
+                    const y = Math.round(Math.random() * 130);
+                    bindSlipeEvent(this, slipeSpan, puzzleReal, x);
+
+                    loadedImg("dog.jpg", (img) => {
+                        ctxBg.drawImage(img, 0, 0, 280, 200);
+                        puzzleBg.x = x;
+                        puzzleBg.y = y;
+                        puzzleReal.setOriPos(x, y);
+                        puzzleReal.setImg(img);
+                        puzzleReal.y = y;
+                        puzzleReal.x = 0;
+                    });
+                };
+                const Captcha = function (htmlEL) {
+                    const dom =
+                        typeof htmlEL === "object"
+                            ? htmlEL
+                            : document.querySelector(htmlEL);
+                    return new initCaptcha(dom);
+                };
+                return Captcha;
+            });
+            var s = $Captcha(".captcha");
+        </script>
+    </body>
+</html>
